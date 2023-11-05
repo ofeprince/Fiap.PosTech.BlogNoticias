@@ -1,0 +1,62 @@
+# Docker
+# Build and push an image to Azure Container Registry
+# https://docs.microsoft.com/azure/devops/pipelines/languages/docker
+
+trigger:
+- master
+
+resources:
+- repo: self
+
+variables:
+  # Container registry service connection established during pipeline creation
+  dockerRegistryServiceConnection: 'seuServicoDeConexao'
+  imageRepository: 'terceirotechchallenge'
+  containerRegistry: 'blognoticias.azurecr.io'
+  dockerfilePath: '$(Build.SourcesDirectory)/Dockerfile'
+  tag: '$(Build.BuildId)'
+  dockerId: 'blognoticias'
+  dockerPassword: 'SenhaDoSeuAdminACR'
+
+  # Agent VM image name
+  vmImageName: 'ubuntu-latest'
+
+steps:
+#- script: |
+#    docker build -f Dockerfile -t $(dockerId)/$(imageRepository):$BUILD_BUILDID .
+#    docker run --name techchallenge --rm -d $(dockerId)/$(imageRepository):$BUILD_BUILDID
+#    docker cp techchallenge:/src/Fiap.PosTech.BlogNoticias.Testes/TestResults/ $(System.DefaultWorkingDirectory)
+#    docker cp techchallenge:/src/Fiap.PosTech.BlogNoticias.Api/app/publish $(System.DefaultWorkingDirectory)
+#    docker stop techchallenge
+#  displayName: Docker build and test
+
+
+- script: |
+    docker build -f Dockerfile --target build -t $(dockerId)/$(imageRepository):$BUILD_BUILDID .
+    docker create -ti --name testcontainer $(dockerId)/$(imageRepository):$BUILD_BUILDID
+    docker cp testcontainer:/src/Fiap.PosTech.BlogNoticias.Testes/TestResults/ $(Build.ArtifactStagingDirectory)/testresults
+    docker rm -fv testcontainer
+  displayName: Docker build and test
+
+#- task: PublishTestResults@2
+#  inputs:
+#    testResultsFormat: 'VSTest'
+#    testResultsFiles: '*.trx'
+#    failTaskOnFailedTests: true
+
+- task: PublishTestResults@2
+  inputs:
+    testResultsFormat: 'VSTest'
+    testResultsFiles: '*.trx'
+    searchFolder: '$(Build.ArtifactStagingDirectory)/testresults'
+    mergeTestResults: true
+    failTaskOnFailedTests: true
+    testRunTitle: '$(Build.BuildId)'
+    buildConfiguration: '$(buildConfiguration)'
+
+- script: |
+    docker build -f Dockerfile -t $(dockerId).azurecr.io/$(imageRepository):$BUILD_BUILDID .
+    docker login -u $(dockerId) -p $pswd $(dockerid).azurecr.io
+    docker push $(dockerId).azurecr.io/$(imageRepository):$BUILD_BUILDID 
+  env:
+    pswd: $(dockerPassword)
